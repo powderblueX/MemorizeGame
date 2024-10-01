@@ -25,10 +25,14 @@ struct EmojiMemoryGameView: View {
     
     var cards: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 85), spacing: 0)], spacing: 0) {
-            ForEach(viewModel.cards.indices, id: \.self) { index in
-                CardView(viewModel.cards[index])
+            // ForEach(viewModel.cards.indices, id: \.self) 通过索引访问，只会对特定的卡片进行动画效果，而不是整体，更细粒度地处理动画
+            ForEach(viewModel.cards) { card in // 整体视图的重新渲染
+                CardView(card)
                     .aspectRatio(2/3, contentMode: .fit)
                     .padding(4)
+                    .onTapGesture {
+                        viewModel.choose(card)
+                    }
             }
         }
         .foregroundStyle(Color.blue)
@@ -56,6 +60,7 @@ struct EmojiMemoryGameView: View {
                 base.fill()
                     .opacity(card.isFaceUp ? 0 : 1)
             }
+            .opacity(card.isFaceUp || !card.isMatched ? 1 : 0)
         }
     }
 }
