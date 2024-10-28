@@ -1,4 +1,4 @@
-# MemorizeGame
+## MemorizeGame
 
 2024.10.1
 
@@ -45,6 +45,8 @@ extension Array { // Array 类型创建的一个扩展
 
 
 2024.10.5
+
+## View
 
 ### HStack（水平堆叠）
 
@@ -283,4 +285,153 @@ struct ContentView: View {
         .background(Color.yellow.opacity(0.5))
     }
 }
+```
+
+
+
+2024.10.28
+
+## 多线程
+
+### Sync Async Serial Concurrent
+
+1. 同步(Sync)：同步方法或同步代码块在同一时间只能被一个线程执行。其他线程试图访问同步代码时，会被阻塞，直到同步代码执行完毕。
+2. 异步(Async)：异步方法或代码块在执行时，不会阻塞当前线程。相反，它会将任务委托给另一个线程来执行，然后立即返回到调用者。
+3. 串行(Serial)：串行执行意味着一个任务接一个任务执行，每个任务必须等待前一个任务完成。
+4. 并发(Concurrent)：并发执行意味着多个任务可以在同一时间执行，可能是同一个CPU核心内的多任务处理，也可能是多个CPU核心或者分布式系统中的任务分配。
+
+### iOS中多线程技术
+
+1. NSThread
+2. GCD(Grand Central DIspatch)
+3. NSOperation/NSOperationQueue
+
+注：iOS 多线程开发众多使用队列来管理而非自己创建 NSThread
+
+#### GCD
+
+1. 基本概念
+    - 任务（Task）: 需要执行的工作单位，可以是函数或代码块。
+    - 队列（Queue）: 任务的组织结构，GCD使用队列来调度和管理任务的执行。队列可以是串行的（按顺序执行）或并发的（可以同时执行多个任务）。
+    - 并发队列: 多个任务可以同时执行的队列。系统根据可用的 CPU 核心来决定同时运行多少个任务。
+    - 串行队列: 任务按照添加顺序一个接一个地执行。
+2. 创建队列
+    GCD 提供了简单的 API 来创建并管理队列。可以使用 dispatch_queue_create 创建串行或并发队列。
+    ```swift
+    let serialQueue = DispatchQueue(label: "com.example.serialQueue")
+    let concurrentQueue = DispatchQueue(label: "com.example.concurrentQueue", attributes: .concurrent) // attributes: .concurrent：表示创建一个并行队列
+    ```
+3. 提交任务
+    ```swift
+    serialQueue.async { // 串行队列一次只执行一个任务
+        print("1. This is executed on a serial queue.")
+    }
+    serialQueue.async { // 虽然是异步提交，但由于是串行队列，所以两个任务会按顺序一个接一个地执行
+        print("2. This is executed on a serial queue.")
+    }
+
+    concurrentQueue.async { // 并行队列一次可执行多个任务
+        print("1. This is executed on a concurrent queue.")
+    }
+    concurrentQueue.async { // 任务同时执行，顺序会因任务的执行时间和系统调度的策略而有所不同
+        print("2. This is executed on a concurrent queue.")
+    }
+    ```
+4. 全局队列
+    GCD 提供了全局队列，可以使用 DispatchQueue.global() 来访问。全局队列是并发的，适用于需要并发执行的任务。
+    globalQueue 一般情况下只支持异步（async）方法。
+    ```swift
+    let globalQueue = DispatchQueue.global()
+    globalQueue.async {
+        print("This is executed on a global queue.")
+    }
+    ```
+5. 延迟执行
+    可以使用 dispatch_after 来实现任务的延迟执行。
+    ```swift
+    let delayInSeconds = 2.0
+    DispatchQueue.main.asyncAfter(deadline: .now() + delayInSeconds) {
+        print("This is executed after a delay.")
+    }
+    ```
+6. 组（Dispatch Groups）
+    GCD 支持将多个任务组织在一起，组内的任务可以并行执行。
+    可以同步等待所有组内的任务完成，适用于需要等待任务完成再继续执行的场景。
+    当所有任务完成后，可以指定一个通知回调，通常用于更新 UI 或处理最终数据。
+    - 使用场景：
+        - 网络请求：多个网络请求完成后，更新界面显示结果。
+        - 文件处理：多个文件处理操作完成后，进行汇总或保存。
+    ```swift
+    let dispatchGroup = DispatchGroup()
+
+    dispatchGroup.enter() // 表示有一个任务即将开始，每次调用 enter() 都必须对应一个 leave() 调用
+    DispatchQueue.global().async { // 将任务异步添加到全局队列中执行
+        print("task 1")
+        dispatchGroup.leave()
+    }
+    
+    dispatchGroup.enter() // 表示有一个任务即将开始，每次调用 enter() 都必须对应一个 leave() 调用
+    DispatchQueue.global().async {
+        print("task 2")
+        dispatchGroup.leave()
+    }
+
+    dispatchGroup.notify(queue: DispatchQueue.main) {
+        print("All tasks are completed.")
+    }
+    ```
+7. 信号量（Dispatch Semaphores）
+    信号量用于控制对共享资源的访问，可以限制同时执行的任务数量。
+    ```swift
+    let semaphore = DispatchSemaphore(value: 1)
+    let dispatchQueue = DispatchQueue.global()
+    
+    dispatchQueue.async {
+        semaphore.wait()
+        print("task 1")
+        semaphore.signal()
+    }
+    dispatchQueue.async {
+        semaphore.wait()
+        print("task 1")
+        semaphore.signal()
+    }
+    ```
+8. 适用场景
+    -创建队列：用于管理并行或串行任务。
+    - 提交任务：在队列中添加任务，实现异步或同步执行。
+    - 全局队列：适用于需要跨应用的后台任务执行。
+    - 延迟执行：适用于需要在特定时间后执行的任务。
+    - 组（Dispatch Groups）：用于同步多个异步任务，确定所有任务完成后执行后续操作。
+    - 信号量（Dispatch Semaphores）：用于控制并发数，确保资源被安全访问。
+
+##### 多个线程之间信息的传递
+
+```swift
+// 创建数据共享资源
+var sharedResource = 0
+
+// 创建一个并行队列
+let resourceQueue = DispatchQueue(label: "com.example.resourceQueue", attributes: .concurrent)
+
+globalQueue.async {
+    resourceQueue.async(flags: .barrier) {
+        sharedResource += 1
+        print("线程 1 修改资源: \(sharedResource)")
+    }
+}
+
+globalQueue.async {
+    resourceQueue.async(flags: .barrier) {
+        sharedResource += 1
+        print("线程 2 修改资源: \(sharedResource)")
+    }
+}
+
+globalQueue.async {
+    resourceQueue.async {
+        print("读取资源: \(sharedResource)")
+    }
+}
+// 代码的输出顺序取决于任务的执行顺序，但最终 sharedResource 的值会是 2
 ```
